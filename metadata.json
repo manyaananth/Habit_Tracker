@@ -1,0 +1,6 @@
+{
+  "name": "Momentum",
+  "description": "A dark glassmorphism modern habit tracker with custom analytics, mood journals, AI Coach mentoring, and XP rewards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
