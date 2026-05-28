@@ -41,3 +41,19 @@ data class XpLog(
     val timestamp: Long = System.currentTimeMillis(),
     val referenceId: String = "" // To prevent duplicates (e.g. "HA_id" or "ML_dateString" or "JW_dateString" or "HC_habitId_dateString")
 )
+
+@Entity(tableName = "concept_completions")
+data class ConceptCompletion(
+    @PrimaryKey val compositeKey: String, // "yyyy-MM-dd_conceptId"
+    val conceptId: String,
+    val dateString: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "user_accounts")
+data class UserAccount(
+    @PrimaryKey val email: String,
+    val username: String,
+    val passwordHash: String,
+    val createdAt: Long = System.currentTimeMillis()
+)

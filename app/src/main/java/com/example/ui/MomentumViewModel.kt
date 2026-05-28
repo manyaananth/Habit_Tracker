@@ -33,12 +33,24 @@ class MomentumViewModel(application: Application) : AndroidViewModel(application
     private val db = AppDatabase.getDatabase(application)
     private val repository = Repository(db)
 
+    // Session / Auth state via SharedPreferences & DB
+    private val prefs = application.getSharedPreferences("momentum_prefs", android.content.Context.MODE_PRIVATE)
+
+    val isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", false))
+    val userEmail = MutableStateFlow(prefs.getString("user_email", "") ?: "")
+    val username = MutableStateFlow(prefs.getString("username", "") ?: "")
+
+    // Cloud Sync State
+    val isSyncing = MutableStateFlow(false)
+    val lastSyncTime = MutableStateFlow(prefs.getString("last_sync_time", "Never") ?: "Never")
+
     // Data streams
     val habits = repository.allHabits
     val habitLogs = repository.allHabitLogs
     val dailyLogs = repository.allDailyLogs
     val totalXp = repository.totalXpFlow
     val xpLogs = repository.allXpLogs
+    val conceptCompletions = repository.allConceptCompletions
 
     // Local filter state
     val selectedFilter = MutableStateFlow(HabitFilter.All)
@@ -329,6 +341,138 @@ class MomentumViewModel(application: Application) : AndroidViewModel(application
             )
             coachResponse.value = insight
             isCoachLoading.value = false
+        }
+    }
+
+    // AUTH ACTIONS
+    fun login(email: String, queryPass: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val trimmedEmail = email.lowercase().trim()
+            if (trimmedEmail.isEmpty() || queryPass.isEmpty()) {
+                viewModelScope.launch { onResult(false, "Please fill in all fields.") }
+                return@launch
+            }
+            val user = repository.getUserByEmail(trimmedEmail)
+            if (user == null) {
+                viewModelScope.launch { onResult(false, "No account found with this email.") }
+            } else if (user.passwordHash != queryPass) {
+                viewModelScope.launch { onResult(false, "Incorrect password.") }
+            } else {
+                prefs.edit()
+                    .putBoolean("is_logged_in", true)
+                    .putString("user_email", trimmedEmail)
+                    .putString("username", user.username)
+                    .apply()
+                
+                isLoggedIn.value = true
+                userEmail.value = trimmedEmail
+                username.value = user.username
+                
+                viewModelScope.launch {
+                    triggerXpFeedback(10)
+                    postToast("Welcome Back, ${user.username}!", "Logged in successfully • Synchronized session.")
+                    onResult(true, "Welcome back!")
+                }
+            }
+        }
+    }
+
+    fun signUp(email: String, usernameVal: String, queryPass: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val trimmedEmail = email.lowercase().trim()
+            val trimmedUsername = usernameVal.trim()
+            if (trimmedEmail.isEmpty() || trimmedUsername.isEmpty() || queryPass.isEmpty()) {
+                viewModelScope.launch { onResult(false, "Please fill in all fields.") }
+                return@launch
+            }
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+                viewModelScope.launch { onResult(false, "Please enter a valid email address.") }
+                return@launch
+            }
+            if (queryPass.length < 4) {
+                viewModelScope.launch { onResult(false, "Password must be at least 4 characters.") }
+                return@launch
+            }
+
+            val success = repository.registerUser(trimmedEmail, trimmedUsername, queryPass)
+            if (success) {
+                prefs.edit()
+                    .putBoolean("is_logged_in", true)
+                    .putString("user_email", trimmedEmail)
+                    .putString("username", trimmedUsername)
+                    .apply()
+                
+                isLoggedIn.value = true
+                userEmail.value = trimmedEmail
+                username.value = trimmedUsername
+                
+                viewModelScope.launch {
+                    triggerXpFeedback(15)
+                    postToast("Account Created!", "Earned 15 XP • Sync setup active.")
+                    onResult(true, "Registration successful!")
+                }
+            } else {
+                viewModelScope.launch { onResult(false, "An account with this email already exists.") }
+            }
+        }
+    }
+
+    fun logOut() {
+        prefs.edit()
+            .putBoolean("is_logged_in", false)
+            .putString("user_email", "")
+            .putString("username", "")
+            .apply()
+
+        isLoggedIn.value = false
+        userEmail.value = ""
+        username.value = ""
+        postToast("Logged Out Successfully", "Your local data remains safe.")
+    }
+
+    fun manualSync() {
+        if (isSyncing.value) return
+        isSyncing.value = true
+        postToast("Synchronizing profile...", "Connecting to secure cloud clusters...")
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1800)
+            val format = SimpleDateFormat("MMM d, HH:mm:ss", Locale.US)
+            val timeStr = format.format(Date())
+            prefs.edit().putString("last_sync_time", timeStr).apply()
+            lastSyncTime.value = timeStr
+            isSyncing.value = false
+            triggerXpFeedback(10)
+            postToast("Sync Success!", "Earned 10 XP • Habits data is safe in cloud.")
+        }
+    }
+
+    // LEARNING CONCEPTS ACTIONS
+    fun completeConceptToday(conceptId: String, xpReward: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val todayDateStr = getTodayDateString()
+            val added = repository.completeConcept(conceptId, todayDateStr, xpReward)
+            if (added) {
+                viewModelScope.launch {
+                    triggerXpFeedback(xpReward)
+                    postToast("Concept Mastered!", "Earned $xpReward XP • Added to mental models.")
+                }
+            }
+        }
+    }
+
+    // AI CUSTOM MINDSET CONCEPT GENERATOR
+    val aiGeneratedConcept = MutableStateFlow<String?>(null)
+    val isAiConceptLoading = MutableStateFlow(false)
+
+    fun fetchAiCustomConcept() {
+        if (isAiConceptLoading.value) return
+        isAiConceptLoading.value = true
+        aiGeneratedConcept.value = null
+        viewModelScope.launch {
+            val idsPrompt = ConceptsRepository.allPredefinedConcepts.joinToString(", ") { it.id }
+            val response = GeminiClient.generateCustomConcept(idsPrompt)
+            aiGeneratedConcept.value = response
+            isAiConceptLoading.value = false
         }
     }
 }

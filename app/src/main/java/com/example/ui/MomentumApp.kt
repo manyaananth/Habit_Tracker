@@ -86,8 +86,13 @@ fun MomentumApp(viewModel: MomentumViewModel = viewModel()) {
             )
         }
 
-        // Core Layout Scroll
-        Scaffold(
+        val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+
+        if (!isLoggedIn) {
+            MomentumLoginScreen(viewModel = viewModel)
+        } else {
+            // Core Layout Scroll
+            Scaffold(
             containerColor = Color.Transparent,
             topBar = {
                 MomentumHeader(
@@ -186,15 +191,16 @@ fun MomentumApp(viewModel: MomentumViewModel = viewModel()) {
             }
         }
 
-        // Habit Add Modal
-        if (showAddHabitDialog) {
-            AddHabitDialog(
-                onDismiss = { showAddHabitDialog = false },
-                onAddHabit = { title, freq, count, icon, color ->
-                    viewModel.addHabit(title, freq, count, icon, color)
-                    showAddHabitDialog = false
-                }
-            )
+            // Habit Add Modal
+            if (showAddHabitDialog) {
+                AddHabitDialog(
+                    onDismiss = { showAddHabitDialog = false },
+                    onAddHabit = { title, freq, count, icon, color ->
+                        viewModel.addHabit(title, freq, count, icon, color)
+                        showAddHabitDialog = false
+                    }
+                )
+            }
         }
     }
 }
@@ -243,6 +249,14 @@ fun MomentumHeader(
         monthlyCompletions += logsThisMonth.coerceAtMost(h.targetCount)
     }
 
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val lastSyncText by viewModel.lastSyncTime.collectAsState()
+    var showSyncDialog by remember { mutableStateOf(false) }
+
+    if (showSyncDialog) {
+        CloudProfileSyncDialog(viewModel = viewModel, onDismiss = { showSyncDialog = false })
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -264,24 +278,40 @@ fun MomentumHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Momentum",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Serif,
-                        letterSpacing = 0.2.sp
-                    ),
-                    color = Color.White
-                )
-                Text(
-                    text = viewModel.getTodayDisplayString().uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 1.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
-                    color = Color(0xFF94A3B8)
-                )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                IconButton(
+                    onClick = { showSyncDialog = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isSyncing) Icons.Default.Refresh else Icons.Default.AccountCircle,
+                        contentDescription = "Sync Cloud Status",
+                        tint = if (isSyncing) Color(0xFF6366F1) else Color(0xFF22C55E),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Momentum",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
+                            letterSpacing = 0.2.sp
+                        ),
+                        color = Color.White
+                    )
+                    Text(
+                        text = viewModel.getTodayDisplayString().uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 1.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = Color(0xFF94A3B8)
+                    )
+                }
             }
 
             // RPG Badge Pill
@@ -496,36 +526,58 @@ fun TodayTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (displayedHabits.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🔮", fontSize = 36.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Your loop is empty.",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Text(
-                        text = "Build a dynamic custom habit loop below",
-                        color = Color.LightGray,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
-                    )
-                }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Mindset Science Learning Block
+            item {
+                DailyLearningConceptsCard(viewModel = viewModel)
+                Spacer(modifier = Modifier.height(10.dp))
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+
+            // Habits Section Header
+            item {
+                Text(
+                    text = "ACTIVE HABITS",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF94A3B8),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+
+            if (displayedHabits.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🔮", fontSize = 36.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Your loop is empty.",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "Build a dynamic custom habit loop below",
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            )
+                        }
+                    }
+                }
+            } else {
                 items(displayedHabits, key = { it.id }) { habit ->
                     // Find completed logs for period
                     val isChecked = logs.any { it.habitId == habit.id && it.dateString == todayDateStr }
@@ -551,9 +603,10 @@ fun TodayTabContent(
                         viewModel = viewModel
                     )
                 }
-                item {
-                    Spacer(modifier = Modifier.height(80.dp)) // Padding for FAB
-                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(100.dp)) // Padding for FAB & Nav
             }
         }
     }
@@ -2089,6 +2142,925 @@ fun MomentumBottomNavigation(
                         fontWeight = if (active) FontWeight.Black else FontWeight.Medium,
                         color = if (active) Color.White else Color.Gray
                     )
+                }
+            }
+        }
+    }
+}
+
+
+// ======================== DAILY MINDSET LEARNING ========================
+@Composable
+fun DailyLearningConceptsCard(viewModel: MomentumViewModel) {
+    val todayDateStr = viewModel.getTodayDateString()
+    val completions by viewModel.conceptCompletions.collectAsState(initial = emptyList())
+    val concepts = remember { com.example.data.ConceptsRepository.getDailyConceptsForToday() }
+    
+    var expandedConcept by remember { mutableStateOf<com.example.data.Concept?>(null) }
+    var showAiExplanationDialog by remember { mutableStateOf(false) }
+
+    // State for generated AI custom concept
+    val aiGeneratedConcept by viewModel.aiGeneratedConcept.collectAsState()
+    val isAiLoading by viewModel.isAiConceptLoading.collectAsState()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🧠", fontSize = 20.sp, modifier = Modifier.padding(end = 8.dp))
+                    Column {
+                        Text(
+                            text = "Daily Mindset Science",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "1-2 premium insights daily",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF6366F1).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "NEW TODAY",
+                        color = Color(0xFFA5B4FC),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Concepts list
+            concepts.forEachIndexed { index, concept ->
+                val isDone = completions.any { it.conceptId == concept.id && it.dateString == todayDateStr }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .clickable { expandedConcept = concept }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = concept.emoji,
+                            fontSize = 22.sp,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Insight ${index + 1}: ${concept.title}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = concept.summary,
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    
+                    // Check Indicator or Icon arrow
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isDone) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .background(Color(0xFF22C55E), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Read",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "+${concept.xpReward} XP",
+                                color = Color(0xFFF59E0B),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowRight,
+                                contentDescription = "Learn More",
+                                tint = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+                }
+                if (index < concepts.size - 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // AI custom concept block
+            Divider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (aiGeneratedConcept != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF6366F1).copy(alpha = 0.15f), Color(0xFFEC4899).copy(alpha = 0.15f))
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            Brush.linearGradient(colors = listOf(Color(0xFF6366F1).copy(alpha = 0.3f), Color(0xFFEC4899).copy(alpha = 0.3f))),
+                            RoundedCornerShape(16.dp)
+                        )
+                        .clickable { showAiExplanationDialog = true }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("✨", fontSize = 22.sp, modifier = Modifier.padding(end = 12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "AI Custom Concept Ready",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "Tap to read custom AI generation",
+                            color = Color(0xFFE2E8F0),
+                            fontSize = 11.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowRight,
+                        contentDescription = "Read AI Concept",
+                        tint = Color.White
+                    )
+                }
+            } else {
+                Button(
+                    onClick = { viewModel.fetchAiCustomConcept() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF6366F1), Color(0xFFEC4899))
+                            ),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                ) {
+                    if (isAiLoading) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Personalizing AI Concept...", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    } else {
+                        val iconStarStr = "✨"
+                        Text("$iconStarStr Generate AI Custom Insight (+15 XP)", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    // Standard Concept Dialog
+    if (expandedConcept != null) {
+        ConceptDetailDialog(
+            concept = expandedConcept!!,
+            isCompleted = completions.any { it.conceptId == expandedConcept!!.id && it.dateString == todayDateStr },
+            onCheckoff = {
+                viewModel.completeConceptToday(expandedConcept!!.id, expandedConcept!!.xpReward)
+                expandedConcept = null
+            },
+            onDismiss = { expandedConcept = null }
+        )
+    }
+
+    // AI Generated Concept Dialog
+    if (showAiExplanationDialog && aiGeneratedConcept != null) {
+        val parsed = parseAiConcept(aiGeneratedConcept!!)
+        ConceptDetailDialog(
+            concept = parsed,
+            isCompleted = completions.any { it.conceptId == parsed.id && it.dateString == todayDateStr },
+            onCheckoff = {
+                viewModel.completeConceptToday(parsed.id, parsed.xpReward)
+                showAiExplanationDialog = false
+            },
+            onDismiss = { showAiExplanationDialog = false }
+        )
+    }
+}
+
+fun parseAiConcept(raw: String): com.example.data.Concept {
+    var title = "Nuance Flow"
+    var category = "Focus Synthesis"
+    var emoji = "🧬"
+    var summary = "Optimize environmental factors to initiate flow states."
+    var longDescription = "Optimize focus environments by minimizing sensory background distraction."
+    var fact = "Scientific research shows that reducing environmental context shifting speeds task resumption."
+
+    try {
+        val lines = raw.lines()
+        for (line in lines) {
+            val clean = line.trim()
+            if (clean.startsWith("[TITLE]")) {
+                title = clean.removePrefix("[TITLE]").trim()
+            } else if (clean.startsWith("[CATEGORY]")) {
+                category = clean.removePrefix("[CATEGORY]").trim()
+            } else if (clean.startsWith("[EMOJI]")) {
+                emoji = clean.removePrefix("[EMOJI]").trim()
+            } else if (clean.startsWith("[SUMMARY]")) {
+                summary = clean.removePrefix("[SUMMARY]").trim()
+            } else if (clean.startsWith("[LONG_TEXT]")) {
+                longDescription = clean.removePrefix("[LONG_TEXT]").trim()
+            } else if (clean.startsWith("[FACT]")) {
+                fact = clean.removePrefix("[FACT]").trim()
+            }
+        }
+    } catch (e: Exception) {
+        // fallback
+    }
+
+    return com.example.data.Concept(
+        id = "ai_concept_${title.lowercase().replace(" ", "_").hashCode()}",
+        title = title,
+        category = category,
+        emoji = emoji,
+        summary = summary,
+        longDescription = longDescription,
+        scientificFact = fact
+    )
+}
+
+@Composable
+fun ConceptDetailDialog(
+    concept: com.example.data.Concept,
+    isCompleted: Boolean,
+    onCheckoff: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF13112E))
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Header emoji and close
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = concept.emoji, fontSize = 28.sp)
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Titles
+                Text(
+                    text = concept.category.uppercase(),
+                    color = Color(0xFFA5B4FC),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = concept.title,
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Summary Block
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = concept.summary,
+                        color = Color(0xFFE2E8F0),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = androidx.compose.ui.text.TextStyle(lineHeight = 18.sp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Detail Explanation
+                Text(
+                    text = "THE MECHANISM",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = concept.longDescription,
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 13.sp,
+                    style = androidx.compose.ui.text.TextStyle(lineHeight = 19.sp)
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Research / Quote Block
+                Text(
+                    text = "LOGISTICS & SCIENCE",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF6366F1).copy(alpha = 0.08f))
+                        .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = concept.scientificFact,
+                            color = Color(0xFFA5B4FC),
+                            fontSize = 11.sp,
+                            style = androidx.compose.ui.text.TextStyle(lineHeight = 16.sp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Button complete
+                if (isCompleted) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(45.dp)
+                            .background(Color(0xFF22C55E).copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                            .border(1.dp, Color(0xFF22C55E), RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Done", tint = Color(0xFF22C55E))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Fully Mastered For Today • XP Awarded", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = onCheckoff,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(45.dp)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF6366F1), Color(0xFFEC4899))
+                                ),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                    ) {
+                        Text(
+                            text = "Digest & Applying Mindset (+${concept.xpReward} XP)",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// ======================== CLOUD ACCOUNT MANAGEMENT ========================
+@Composable
+fun CloudProfileSyncDialog(
+    viewModel: MomentumViewModel,
+    onDismiss: () -> Unit
+) {
+    val email by viewModel.userEmail.collectAsState()
+    val username by viewModel.username.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val lastSyncTime by viewModel.lastSyncTime.collectAsState()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .border(2.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F0C29))
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Topic Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "CLOUD ACCOUNT",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Avatar simulation
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(
+                            Brush.linearGradient(colors = listOf(Color(0xFF6366F1), Color(0xFFEC4899))),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = username.take(2).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 24.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = username,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = email,
+                    color = Color(0xFF94A3B8),
+                    fontSize = 12.sp
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Session Status Block
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Connection Integrity:", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text("Secured Sync Active", color = Color(0xFF22C55E), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Last Server Backup:", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text(lastSyncTime, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Button options
+                Button(
+                    onClick = { viewModel.manualSync() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(45.dp)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF6366F1), Color(0xFFEC4899))
+                            ),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                ) {
+                    if (isSyncing) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Uploading SQLite profiles...", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = "", tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Backup Now & Cloud Sync (+10 XP)", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Sign Out Option
+                OutlinedButton(
+                    onClick = {
+                        viewModel.logOut()
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(45.dp)
+                        .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.ExitToApp, contentDescription = "Log Out", tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Disconnect & Log Out", color = Color(0xFFEF4444).copy(alpha = 0.85f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "Logging in with this account on other mobiles instantly synchronizes your character XP details, customization values, and mindset analytics.",
+                    color = Color(0xFF64748B),
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center,
+                    style = androidx.compose.ui.text.TextStyle(lineHeight = 12.sp)
+                )
+            }
+        }
+    }
+}
+
+
+// ======================== AUTHENTICATION PORTAL SERVICE ========================
+@Composable
+fun MomentumLoginScreen(viewModel: MomentumViewModel) {
+    var isSignUpMode by remember { mutableStateOf(false) }
+
+    var email by remember { mutableStateOf("") }
+    var usernameVal by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf("") }
+    var successText by remember { mutableStateOf("") }
+    var isWorking by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 32.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .border(2.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(28.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF13112E).copy(alpha = 0.95f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Application Branding Logo
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .background(
+                            Brush.linearGradient(colors = listOf(Color(0xFF6366F1), Color(0xFFEC4899))),
+                            RoundedCornerShape(18.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "⚡", fontSize = 32.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "MOMENTUM",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = 1.5.sp
+                    ),
+                    color = Color.White
+                )
+
+                Text(
+                    text = "Sync habits & learn daily mindset science",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Selector tabs TabRow alternative
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .padding(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (!isSignUpMode) Color(0xFF6366F1) else Color.Transparent)
+                            .clickable {
+                                isSignUpMode = false
+                                errorText = ""
+                                successText = ""
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Log In", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (isSignUpMode) Color(0xFFEC4899) else Color.Transparent)
+                            .clickable {
+                                isSignUpMode = true
+                                errorText = ""
+                                successText = ""
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Sign Up", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Input components
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it; errorText = "" },
+                    label = { Text("Email Address", color = Color(0xFF94A3B8)) },
+                    placeholder = { Text("username@domain.com") },
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.White.copy(alpha = 0.03f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.03f),
+                        focusedIndicatorColor = Color(0xFF6366F1),
+                        unfocusedIndicatorColor = Color.White.copy(alpha = 0.1f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("auth_email_field"),
+                    shape = RoundedCornerShape(14.dp),
+                    maxLines = 1
+                )
+
+                if (isSignUpMode) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = usernameVal,
+                        onValueChange = { usernameVal = it; errorText = "" },
+                        label = { Text("Username", color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Your explorer name") },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color.White.copy(alpha = 0.03f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.03f),
+                            focusedIndicatorColor = Color(0xFFEC4899),
+                            unfocusedIndicatorColor = Color.White.copy(alpha = 0.1f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("auth_username_field"),
+                        shape = RoundedCornerShape(14.dp),
+                        maxLines = 1
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; errorText = "" },
+                    label = { Text("Secure Password", color = Color(0xFF94A3B8)) },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.White.copy(alpha = 0.03f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.03f),
+                        focusedIndicatorColor = if (isSignUpMode) Color(0xFFEC4899) else Color(0xFF6366F1),
+                        unfocusedIndicatorColor = Color.White.copy(alpha = 0.1f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("auth_password_field"),
+                    shape = RoundedCornerShape(14.dp),
+                    maxLines = 1
+                )
+
+                // Validation indicators
+                if (errorText.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "⚠️ $errorText",
+                        color = Color(0xFFEF4444),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                if (successText.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "✓ $successText",
+                        color = Color(0xFF22C55E),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Core Submit Button
+                Button(
+                    onClick = {
+                        if (isWorking) return@Button
+                        isWorking = true
+                        errorText = ""
+                        successText = ""
+                        
+                        if (isSignUpMode) {
+                            viewModel.signUp(email, usernameVal, password) { success, msg ->
+                                isWorking = false
+                                if (success) {
+                                    successText = msg
+                                } else {
+                                    errorText = msg
+                                }
+                            }
+                        } else {
+                            viewModel.login(email, password) { success, msg ->
+                                isWorking = false
+                                if (success) {
+                                    successText = msg
+                                } else {
+                                    errorText = msg
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .background(
+                            Brush.linearGradient(
+                                colors = if (isSignUpMode) {
+                                    listOf(Color(0xFFEC4899), Color(0xFF6366F1))
+                                } else {
+                                    listOf(Color(0xFF6366F1), Color(0xFFEC4899))
+                                }
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                ) {
+                    if (isWorking) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text(
+                            text = if (isSignUpMode) "Register & Start Syncing" else "Sync Login Session",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Quick preview card for quick access
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(16.dp))
+                        .clickable {
+                            email = "demo@momentum.app"
+                            password = "demo"
+                            if (isSignUpMode) {
+                                usernameVal = "Explorer"
+                                isSignUpMode = false
+                            }
+                        }
+                        .padding(12.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "💡 Tap For Autocomplete Demo Explorer Account",
+                            color = Color(0xFFF59E0B),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "demo@momentum.app • Password: demo",
+                            color = Color(0xFFCBD5E1),
+                            fontSize = 10.sp
+                        )
+                    }
                 }
             }
         }

@@ -114,4 +114,34 @@ object GeminiClient {
             "Connection issue: ${e.localizedMessage ?: "Please confirm your internet connection and AI Coach API keys and try again."}"
         }
     }
+
+    suspend fun generateCustomConcept(existingIdsPrompt: String): String {
+        val apiKey = BuildConfig.GEMINI_API_KEY
+        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+            return "Please set your GEMINI_API_KEY inside the Secrets panel of Google AI Studio to unlock personalized custom AI mindset concepts!"
+        }
+        val prompt = """
+            You are "Momentum Mindset Mentor", a world-class performance and habit science researcher.
+            Create a fascinating, brand new behavior design or mindfulness concept. Do NOT choose these concepts: $existingIdsPrompt.
+            Format your response exactly with the following tags so we can display it nicely in the UI:
+            [TITLE] Conceptualize a 2-4 word powerful name
+            [CATEGORY] Core branch (e.g., Habit Neuroscience, Attention Design, Willpower, Flow)
+            [EMOJI] Single matching emoji
+            [SUMMARY] Short 1-sentence catchy description of the mechanism
+            [LONG_TEXT] Detailed actionable paragraph teaching why it works and how to apply it today
+            [FACT] A beautiful scientific research study summary or quote backing this concept- e.g. "In a 2021 cognitive study, researchers observed..."
+        """.trimIndent()
+        val request = GeminiRequest(
+            contents = listOf(
+                GeminiContent(parts = listOf(GeminiPart(text = prompt)))
+            )
+        )
+        return try {
+            val response = api.generateCoachResponse(apiKey, request)
+            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                ?: "Unable to generate new mental model. Try again in a moment."
+        } catch (e: Exception) {
+            "Connection issue: ${e.localizedMessage ?: "Check your network and try again."}"
+        }
+    }
 }

@@ -64,15 +64,38 @@ interface XpLogDao {
     suspend fun hasXpLogWithRef(referenceId: String): Boolean
 }
 
+@Dao
+interface ConceptCompletionDao {
+    @Query("SELECT * FROM concept_completions ORDER BY timestamp DESC")
+    fun getAllCompletions(): Flow<List<ConceptCompletion>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCompletion(completion: ConceptCompletion)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM concept_completions WHERE compositeKey = :compositeKey)")
+    suspend fun isConceptCompleted(compositeKey: String): Boolean
+}
+
+@Dao
+interface UserAccountDao {
+    @Query("SELECT * FROM user_accounts WHERE email = :email LIMIT 1")
+    suspend fun getUserByEmail(email: String): UserAccount?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun registerUser(user: UserAccount)
+}
+
 @Database(
-    entities = [Habit::class, HabitLog::class, DailyLog::class, XpLog::class],
-    version = 1,
+    entities = [Habit::class, HabitLog::class, DailyLog::class, XpLog::class, ConceptCompletion::class, UserAccount::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun dailyLogDao(): DailyLogDao
     abstract fun xpLogDao(): XpLogDao
+    abstract fun conceptCompletionDao(): ConceptCompletionDao
+    abstract fun userAccountDao(): UserAccountDao
 
     companion object {
         @Volatile

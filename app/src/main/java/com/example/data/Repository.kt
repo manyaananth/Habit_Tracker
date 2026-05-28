@@ -8,6 +8,8 @@ class Repository(private val db: AppDatabase) {
     private val habitDao = db.habitDao()
     private val dailyLogDao = db.dailyLogDao()
     private val xpLogDao = db.xpLogDao()
+    private val conceptCompletionDao = db.conceptCompletionDao()
+    private val userAccountDao = db.userAccountDao()
 
     val allHabits: Flow<List<Habit>> = habitDao.getAllHabits()
     val allHabitLogs: Flow<List<HabitLog>> = habitDao.getAllHabitLogs()
@@ -15,6 +17,8 @@ class Repository(private val db: AppDatabase) {
     
     val totalXpFlow: Flow<Int> = xpLogDao.getTotalXpFlow().map { it ?: 0 }
     val allXpLogs: Flow<List<XpLog>> = xpLogDao.getAllXpLogs()
+
+    val allConceptCompletions: Flow<List<ConceptCompletion>> = conceptCompletionDao.getAllCompletions()
 
     suspend fun insertHabit(habit: Habit): Int {
         val id = habitDao.insertHabit(habit).toInt()
@@ -122,5 +126,30 @@ class Repository(private val db: AppDatabase) {
         } catch (e: Exception) {
             1
         }
+    }
+
+    suspend fun completeConcept(conceptId: String, dateString: String, xpReward: Int): Boolean {
+        val key = "${dateString}_$conceptId"
+        if (conceptCompletionDao.isConceptCompleted(key)) return false
+        
+        val record = ConceptCompletion(compositeKey = key, conceptId = conceptId, dateString = dateString)
+        conceptCompletionDao.insertCompletion(record)
+        
+        // Award XP for digestion/learning (+15 XP)
+        return addXp("CONCEPT_LEARNED", xpReward, "CL_$key")
+    }
+
+    suspend fun getUserByEmail(email: String): UserAccount? {
+        return userAccountDao.getUserByEmail(email.lowercase().trim())
+    }
+
+    suspend fun registerUser(email: String, username: String, passHex: String): Boolean {
+        val trimmedEmail = email.lowercase().trim()
+        val existing = userAccountDao.getUserByEmail(trimmedEmail)
+        if (existing != null) return false
+        
+        val user = UserAccount(email = trimmedEmail, username = username.trim(), passwordHash = passHex)
+        userAccountDao.registerUser(user)
+        return true
     }
 }
